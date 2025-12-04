@@ -1,8 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
-
+import System.Exit
 import Control.Applicative
 import Database.SQLite.Simple
 import Database.SQLite.Simple.FromRow
+import Control.Monad
+
 
 data Users = Users Int String deriving (Show)
 
@@ -16,6 +18,7 @@ instance FromRow Users where
 
 main :: IO ()
 main = do
+    flowHelper
     conn <- open "app/Database/test.db"
     --execute conn "INSERT INTO test (str) VALUES (?)" (Only ("test string 4" :: String))
     execute_ conn "CREATE TABLE IF NOT EXISTS Users (id INTEGER PRIMARY KEY, Name TEXT)"
@@ -23,10 +26,28 @@ main = do
     --execute conn "DROP TABLE users"()
 
     --execute conn "INSERT INTO Users (Name) VALUES (?)"(Only ("John":: String))
-    r <- query_ conn "SELECT * from Users" :: IO [Users]
-    mapM_ print r
+    --r <- query_ conn "SELECT * from Users" :: IO [Users]
+    --mapM_ print r
     close conn
 
+
+
+flowHelper::IO () 
+flowHelper = do
+    putStrLn "Enter a command: (type help if you are stuck)"
+    cmd <-getLine
+    handleCommand cmd
+
+handleCommand:: String -> IO ()
+handleCommand cmd = do
+    case cmd of
+        "help" -> help
+        "exit" -> exitSuccess
+        ":q" -> exitSuccess
+        _ -> putStrLn "ERROR: that command is not recognised, type help for a list of valid commands\n"
+    flowHelper
+    
+    
 
 
 selectUser :: String -> IO ()
@@ -36,9 +57,15 @@ selectUser s = do
     mapM_ print r
     close conn
 
+help :: IO ()
+help = do 
+    putStrLn "\nCommandList:"
+    putStrLn "help - gives a list of the commands and their associated use case"
+    putStrLn "exit - exits out of the program"
 
 
-
+exit:: IO ()
+exit = putStrLn "bye bye"
 
 
 -- myUser :: Int -> String -> User
