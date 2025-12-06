@@ -3,12 +3,13 @@ import System.Exit
 import Control.Applicative
 import Database.SQLite.Simple
 import Control.Monad
-
+import qualified Data.Text as Text
 
 data Users = Users Int String deriving (Show)
 data Books = Books Int String String String (Maybe Int) deriving (Show)
-data TestField = TestField Int String deriving (Show)
+data ID = ID Int deriving(Show)
 
+data UsersBooksJoined = UsersBooksJoined Int String Int String String String (Maybe Int) deriving (Show)
 
 instance FromRow Users where
     fromRow = Users <$> field <*> field
@@ -16,15 +17,19 @@ instance FromRow Users where
 instance FromRow Books where
     fromRow = Books <$> field <*> field <*> field <*> field <*> field
 
+instance FromRow UsersBooksJoined where
+    fromRow = UsersBooksJoined <$> field <*> field <*> field <*> field <*> field <*> field <*> field
 
 
 main :: IO ()
 main = do
     conn <- open "app/Database/test.db"
-    execute_ conn "CREATE TABLE IF NOT EXISTS Users (id INTEGER PRIMARY KEY, Name TEXT)"
-    execute_ conn "CREATE TABLE IF NOT EXISTS Books (id INTEGER PRIMARY KEY, Title TEXT, Author TEXT, Status TEXT,BorrowedBy int)"
+    execute_ conn "CREATE TABLE IF NOT EXISTS Users (UserID INTEGER PRIMARY KEY, Name TEXT)"
+    execute_ conn "CREATE TABLE IF NOT EXISTS Books (BookID INTEGER PRIMARY KEY, Title TEXT, Author TEXT, Status TEXT,BorrowedBy int)"
     --execute conn "DELETE FROM users" ()
     --execute conn "DROP TABLE Books"()
+    --execute conn "DROP TABLE Users"()
+
     --execute conn "INSERT INTO Users (Name) VALUES (?)"(Only ("John":: String))
     --r <- query_ conn "SELECT * from Users" :: IO [Users]
     close conn
@@ -79,13 +84,7 @@ help = do
 
 
 
-
--- myUser :: Int -> String -> User
--- myUser n s = User { userId = n, name = s }
-
-
-
-addBook :: IO()
+addBook :: IO ()
 addBook = do
     putStrLn "Enter Book title: "
     title <- getLine
@@ -95,28 +94,30 @@ addBook = do
     execute conn "INSERT INTO Books(Title,Author,Status,BorrowedBy) VALUES (?,?,?,null)" [title, author, "Available"]
     close conn
 
-removeBook ::IO()
+removeBook ::IO ()
 removeBook = do
     putStrLn "Enter Book Title: "
     titleQuery <- getLine
     putStrLn "Enter Author: "
     authorQuery <- getLine
     conn  <- open "app/Database/test.db"
-    r <- queryNamed conn "SELECT * FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)] :: IO[Books]
+    --r <- queryNamed conn "SELECT (BookID,Title,Author) FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)] :: IO[Books]
+    r <- queryNamed conn "SELECT BookID,Title,Author FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)]
     _ <- queryNamed conn "DELETE FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)] :: IO[Books]
-    forM_ r $ \row ->
-        putStrLn $ show row ++ " Deleted"
+
+
+    forM_ r $ \(id,title,author) ->
+        putStrLn $ Text.unpack "Title: " ++ title ++ " Written by: " ++ author ++ " REMOVED. ID: "++show (id ::Int)
     close conn
 
 
-listBooks :: IO()
+listBooks :: IO ()
 listBooks = do
         conn <- open "app/Database/test.db"
-        r <- query_ conn "SELECT * FROM Books WHERE status = 'Available'" :: IO[Books]
+        r <- query_ conn "SELECT * FROM Books" :: IO[Books]
         mapM_ print r
 
-
-addUser :: IO()
+addUser :: IO ()
 addUser = do
     putStrLn "Enter the user's name"
     name <- getLine
@@ -126,17 +127,27 @@ addUser = do
     putStrLn outputText 
     close conn
 
-borrowBook ::IO()
+borrowBook :: IO ()
 borrowBook = do
     putStrLn "Enter user's ID: "
     userId <- getLine
     putStrLn "Enter Book ID: "
     bookId <- getLine
     conn <- open "app/Database/test.db"
-    execute conn "UPDATE Books SET BorrowedBy = ?, Status = 'Borrowed' WHERE id = ? AND Status = 'Available' "[userId,bookId]
+    execute conn "UPDATE Books SET BorrowedBy = ?, Status = 'Borrowed' WHERE BookID = ? AND Status = 'Available' "[userId,bookId]
     close conn
 
+removeUser :: IO ()
+removeUser = do
 
+    conn <- open "app/Database/test.db"
+    r <- query_ conn "SELECT UserID,Name FROM Users INNER JOIN Books ON Users.UserID = Books.borrowedBy WHERE Users.UserID = 1"
+
+    forM_ r $ \(id,name) ->
+        putStrLn $ Text.unpack name ++show (id ::Int)
+    --mapM_ print r
+        
+    close conn
 
 
 
