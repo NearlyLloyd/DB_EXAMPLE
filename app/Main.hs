@@ -54,6 +54,7 @@ handleCommand cmd = do
         "availableBooks" -> listBooks
         "removeBook" -> removeBook
         "addUser" -> addUser
+        "removeUser" -> removeUser
         "borrowBook" -> borrowBook
         _ -> putStrLn "ERROR: that command is not recognised, type help for a list of valid commands\n"
     flowHelper
@@ -74,9 +75,9 @@ help = do
     putStrLn "addBook - adds a new book"
     putStrLn "removeBook - removes a book if it is available"
     putStrLn "addUser - adds a new user"
+    putStrLn "removeUser - removes a user if they have no borrowed books"
     putStrLn "borrowBook - marks a book as borrowed by a user"
     putStrLn "*NOT IMPLEMENTED*"
-    putStrLn "removeUser - removes a user if they have no borrowed books"
     putStrLn "returnBook - marks a book as returned by the borrowing user"
     putStrLn "availableBooks - lists all available books"
     putStrLn "borrowedBooks - lists all borrowed books with the borrowers"
@@ -137,17 +138,44 @@ borrowBook = do
     execute conn "UPDATE Books SET BorrowedBy = ?, Status = 'Borrowed' WHERE BookID = ? AND Status = 'Available' "[userId,bookId]
     close conn
 
+
 removeUser :: IO ()
 removeUser = do
-
+    putStrLn "Enter user's ID: "
+    userId <- getLine
     conn <- open "app/Database/test.db"
-    r <- query_ conn "SELECT UserID,Name FROM Users INNER JOIN Books ON Users.UserID = Books.borrowedBy WHERE Users.UserID = 1"
+    r <- queryNamed conn "SELECT UserID,Name FROM Users WHERE UserID = :userId" [":userId" := userId] :: IO [Users]
+    if null r
+        then putStrLn "User Does not exist"
+        else do
+            r2 <- queryNamed conn "SELECT BorrowedBy,Title FROM Books WHERE BorrowedBy = :userId" [":userId" := userId]
 
-    forM_ r $ \(id,name) ->
-        putStrLn $ Text.unpack name ++show (id ::Int)
-    --mapM_ print r
-        
+            if null r2
+                then do 
+                    execute conn "DELETE FROM BOOKS BorrowedBy = ?" [userId]
+                    putStrLn "Deleted user successfully!" 
+
+                else putStrLn ("User is currently borrowing " ++ show(length r2) ++ " Book(s)")
+            forM_ r2 $ \(id,title) ->
+                putStrLn $ Text.unpack "Title: " ++ title ++ " BookID: " ++ show (id ::Int)
+
+         
     close conn
+
+returnBook :: IO ()
+returnBook = do
+    putStrLn "enter ID of BOOK to be returned: "
+    bookId <- getLine
+    conn <- open "app/Database/test.db"
+    r <- queryNamed conn "SELECT BorrowedBy,title FROM Books WHERE BookID = :bookId " [":bookId" := bookId] :: IO[Users]
+    close conn
+
+
+
+
+
+
+
 
 
 
