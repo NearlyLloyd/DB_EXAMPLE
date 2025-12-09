@@ -55,6 +55,7 @@ handleCommand cmd = do
         "returnBook" -> returnBook
         "availableBooks" -> availableBooks
         "borrowewdBooks" -> borrowedBooks
+        "listUsers" -> listUsers
         _ -> putStrLn "ERROR: that command is not recognised, type help for a list of valid commands\n"
     flowHelper
     
@@ -79,8 +80,6 @@ help = do
     putStrLn "returnBook - marks a book as returned by the borrowing user"
     putStrLn "availableBooks - lists all available books"
     putStrLn "borrowedBooks - lists all borrowed books with the borrowers"
-
-    putStrLn "*NOT IMPLEMENTED*"
     putStrLn "listUsers - lists all users"
 
 
@@ -195,5 +194,15 @@ borrowedBooks = do
             forM_ r $ \(id,title,userId) ->
                 --r2 <- queryNamed conn "SELECT Name FROM Users WHERE UserID = ? "[userId]
                 putStrLn $ Text.unpack "Title: " ++ title ++ " : BookID: " ++ show (id ::Int) ++ " : Borrowed by userID: " ++ show(userId :: Int)
+
+    close conn
+
+listUsers :: IO ()
+listUsers = do
+    conn <- open "app/Database/test.db"
+    r <- queryNamed conn "SELECT UserID, Name FROM Users "[]
+    putStrLn "\nAll Users: "
+    forM_ r $ \(id,name) ->
+        putStrLn $ Text.unpack "ID: " ++ show (id :: Int) ++ " : Name: " ++ name
 
     close conn
