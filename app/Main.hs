@@ -1,14 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
+--Import required packages
 import System.Exit
-import Control.Applicative
 import Database.SQLite.Simple
 import Control.Monad
 import qualified Data.Text as Text
+import Test.QuickCheck
 
+--define record structure
 data Users = Users Int String deriving (Show)
 data Books = Books Int String String String (Maybe Int) deriving (Show)
-data ID = ID Int deriving(Show)
 
+--define how haskell outputs
 instance FromRow Users where
     fromRow = Users <$> field <*> field
 
@@ -19,21 +21,16 @@ instance FromRow Books where
 
 main :: IO ()
 main = do
-    conn <- open "app/Database/test.db"
+    conn <- open "app/Database/library.db"
     execute_ conn "CREATE TABLE IF NOT EXISTS Users (UserID INTEGER PRIMARY KEY, Name TEXT)"
     execute_ conn "CREATE TABLE IF NOT EXISTS Books (BookID INTEGER PRIMARY KEY, Title TEXT, Author TEXT, Status TEXT,BorrowedBy Int)"
-    --execute conn "DELETE FROM users" ()
-    --execute conn "DROP TABLE Books"()
-    --execute conn "DROP TABLE Users"()
-
-    --execute conn "INSERT INTO Users (Name) VALUES (?)"(Only ("John":: String))
-    --r <- query_ conn "SELECT * from Users" :: IO [Users]
+    --create initial databases and go to flowhelper
     close conn
     flowHelper
 
 
 --allows to control the inputs and control unexpected commands 
-flowHelper::IO () 
+flowHelper :: IO () 
 flowHelper = do
     putStrLn "Enter a command: (type help if you are stuck)"
     cmd <-getLine
@@ -47,25 +44,25 @@ handleCommand cmd = do
         "exit" -> exitSuccess
         ":q" -> exitSuccess
         "addBook" -> addBook
-        "availableBooks" -> listBooks
+        "availableBooks" -> availableBooks
         "removeBook" -> removeBook
         "addUser" -> addUser
         "removeUser" -> removeUser
         "borrowBook" -> borrowBook
         "returnBook" -> returnBook
         "availableBooks" -> availableBooks
-        "borrowewdBooks" -> borrowedBooks
+        "borrowedBooks" -> borrowedBooks
         "listUsers" -> listUsers
         _ -> putStrLn "ERROR: that command is not recognised, type help for a list of valid commands\n"
     flowHelper
     
 
-selectUser :: String -> IO ()
-selectUser s = do
-    conn <- open "app/Database/test.db"
-    r <- queryNamed conn "SELECT * FROM USERS WHERE Name = :Name"[":Name" := s] :: IO[Users]
-    mapM_ print r
-    close conn
+-- selectUser :: String -> IO ()
+-- selectUser s = do
+--     conn <- open "app/Database/library.db"
+--     r <- queryNamed conn "SELECT * FROM USERS WHERE Name = :Name"[":Name" := s] :: IO[Users]
+--     mapM_ print r
+--     close conn
 
 help :: IO ()
 help = do 
@@ -89,35 +86,36 @@ addBook = do
     title <- getLine
     putStrLn "Enter Author name: "
     author <- getLine
-    conn  <- open "app/Database/test.db"
+    conn  <- open "app/Database/library.db"
     execute conn "INSERT INTO Books(Title,Author,Status,BorrowedBy) VALUES (?,?,?,null)" [title, author, "Available"]
     close conn
 
-removeBook ::IO ()
+removeBook :: IO ()
 removeBook = do
     putStrLn "Enter Book Title: "
     titleQuery <- getLine
     putStrLn "Enter Author: "
     authorQuery <- getLine
-    conn  <- open "app/Database/test.db"
+    conn  <- open "app/Database/library.db"
     r <- queryNamed conn "SELECT BookID,Title,Author FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)]
     _ <- queryNamed conn "DELETE FROM Books WHERE (Title = :Title AND Author = :Author AND Status = :Status)" [":Title" := titleQuery,":Author" := authorQuery, ":Status" := ("Available"  :: String)] :: IO[Books]
+    --unpack
     forM_ r $ \(id,title,author) ->
         putStrLn $ Text.unpack "Title: " ++ title ++ " Written by: " ++ author ++ " REMOVED. ID: "++show (id ::Int)
     close conn
 
 
-listBooks :: IO ()
-listBooks = do
-        conn <- open "app/Database/test.db"
-        r <- query_ conn "SELECT * FROM Books" :: IO[Books]
-        mapM_ print r
+-- listBooks :: IO ()
+-- listBooks = do
+--         conn <- open "app/Database/library.db"
+--         r <- query_ conn "SELECT * FROM Books" :: IO[Books]
+--         mapM_ print r
 
 addUser :: IO ()
 addUser = do
     putStrLn "Enter the user's name"
     name <- getLine
-    conn <- open "app/Database/test.db"
+    conn <- open "app/Database/library.db"
     execute conn "INSERT INTO Users(Name) VALUES (?)" [name]
     let outputText = "User: " ++ name ++ " added to database!"
     putStrLn outputText 
@@ -129,7 +127,7 @@ borrowBook = do
     userId <- getLine
     putStrLn "Enter Book ID: "
     bookId <- getLine
-    conn <- open "app/Database/test.db"
+    conn <- open "app/Database/library.db"
     execute conn "UPDATE Books SET BorrowedBy = ?, Status = 'Borrowed' WHERE BookID = ? AND Status = 'Available' "[userId,bookId]
     close conn
 
@@ -138,21 +136,21 @@ removeUser :: IO ()
 removeUser = do
     putStrLn "Enter user's ID: "
     userId <- getLine
-    conn <- open "app/Database/test.db"
+    conn <- open "app/Database/library.db"
     r <- queryNamed conn "SELECT UserID,Name FROM Users WHERE UserID = :userId" [":userId" := userId] :: IO [Users]
-    if null r
+    if null r --if user not found
         then putStrLn "User Does not exist"
-        else do
+        else do --else check if user is borrowing any books
             r2 <- queryNamed conn "SELECT BorrowedBy,Title FROM Books WHERE BorrowedBy = :userId" [":userId" := userId]
 
-            if null r2
+            if null r2--if user is NOT borrowing books, delete 
                 then do 
                     execute conn "DELETE FROM Users WHERE UserID = ?" [userId]
                     putStrLn "Deleted user successfully!" 
 
                 else putStrLn ("User is currently borrowing " ++ show(length r2) ++ " Book(s)")
             forM_ r2 $ \(id,title) ->
-                putStrLn $ Text.unpack "Title: " ++ title ++ " BookID: " ++ show (id ::Int)
+                putStrLn $ Text.unpack "Title: " ++ title ++ " BookID: " ++ show (id ::Int) --list borrowed books
     
     close conn
 
@@ -160,20 +158,20 @@ returnBook :: IO ()
 returnBook = do
     putStrLn "enter ID of BOOK to be returned: "
     bookId <- getLine
-    conn <- open "app/Database/test.db"
+    conn <- open "app/Database/library.db"
     r <- queryNamed conn "SELECT * FROM Books WHERE BookID = :bookId AND Status = 'Borrowed' " [":bookId" := bookId] :: IO[Books]
     if null r
         then putStrLn "Book either does not exist or has already been returned"
         else do
-            execute conn "UPDATE Books SET BorrowedBy = null, Status = 'Borrowed' WHERE BookID = ? "[bookId]
+            execute conn "UPDATE Books SET BorrowedBy = null, Status = 'Available' WHERE BookID = ? "[bookId]
             putStrLn "Book successfully returned!"
 
     close conn
 
 availableBooks :: IO ()
 availableBooks = do
-    conn <- open "app/Database/test.db"
-    r <- queryNamed conn "SELECT BookID,Title FROM Books WHERE Status = 'Available' "[]
+    conn <- open "app/Database/library.db"
+    r <- query_ conn "SELECT BookID,Title FROM Books WHERE Status = 'Available' "
     if null r 
         then putStrLn "There are no available books at this moment"
         else do
@@ -185,8 +183,8 @@ availableBooks = do
     
 borrowedBooks :: IO ()
 borrowedBooks = do
-    conn <- open "app/Database/test.db"
-    r <- queryNamed conn "SELECT BookID, Title, BorrowedBy FROM Books WHERE Status = 'Borrowed' "[]
+    conn <- open "app/Database/library.db"
+    r <- query_ conn "SELECT BookID, Title, BorrowedBy FROM Books WHERE Status = 'Borrowed' "
     if null r 
         then putStrLn "There are no borrowed books at this moment"
         else do
@@ -199,10 +197,12 @@ borrowedBooks = do
 
 listUsers :: IO ()
 listUsers = do
-    conn <- open "app/Database/test.db"
-    r <- queryNamed conn "SELECT UserID, Name FROM Users "[]
+    conn <- open "app/Database/library.db"
+    r <- query_ conn "SELECT UserID, Name FROM Users "
     putStrLn "\nAll Users: "
     forM_ r $ \(id,name) ->
         putStrLn $ Text.unpack "ID: " ++ show (id :: Int) ++ " : Name: " ++ name
 
     close conn
+
+

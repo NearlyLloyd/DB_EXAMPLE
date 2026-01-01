@@ -67,7 +67,7 @@ executable DB-EXAMPLE
     -- other-extensions:
 
     -- Other library packages from which modules are imported.
-    build-depends:    base, sqlite-simple, text
+    build-depends:    base, sqlite-simple, text, QuickCheck
 
     -- Directories containing source files.
     hs-source-dirs:   app
